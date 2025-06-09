@@ -1,0 +1,89 @@
+services:
+  namenode:
+    image: apache/hadoop:3.3.5
+    container_name: namenode
+    hostname: namenode
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop_namenode:/opt/hadoop/data/nameNode
+      - ./hadoop_config:/opt/hadoop/etc/hadoop
+      - ./start-hdfs.sh:/start-hdfs.sh
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    command: ["/bin/bash", "/start-hdfs.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      hdfs_network:
+        ipv4_address: 172.30.0.2
+
+  datanode1:
+    image: apache/hadoop:3.3.5
+    container_name: datanode1
+    hostname: datanode1
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop_datanode1:/opt/hadoop/data/dataNode
+      - ./hadoop_config:/opt/hadoop/etc/hadoop
+      - ./init-datanode.sh:/init-datanode.sh
+    depends_on:
+      namenode:
+        condition: service_healthy
+    command: ["/bin/bash", "/init-datanode.sh"]
+    networks:
+      hdfs_network:
+        ipv4_address: 172.30.0.3
+
+  datanode2:
+    image: apache/hadoop:3.3.5
+    container_name: datanode2
+    hostname: datanode2
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop_datanode2:/opt/hadoop/data/dataNode
+      - ./hadoop_config:/opt/hadoop/etc/hadoop
+      - ./init-datanode.sh:/init-datanode.sh
+    depends_on:
+      namenode:
+        condition: service_healthy
+    command: ["/bin/bash", "/init-datanode.sh"]
+    networks:
+      hdfs_network:
+        ipv4_address: 172.30.0.4
+
+  hdfs-client:
+    image: python:3.9
+    container_name: hdfs-client
+    depends_on:
+      namenode:
+        condition: service_healthy
+    volumes:
+      - ./client.py:/app/client.py
+      - ./requirements.txt:/app/requirements.txt
+    working_dir: /app
+    command: >
+      bash -c "
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      python client.py"
+    networks:
+      hdfs_network:
+        ipv4_address: 172.30.0.5
+    restart: on-failure
+
+networks:
+  hdfs_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/16
